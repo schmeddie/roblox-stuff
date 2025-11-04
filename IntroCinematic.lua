@@ -212,6 +212,8 @@ playButton.Font = Enum.Font.GothamBold
 playButton.AutoButtonColor = false
 playButton.BackgroundTransparency = 1
 playButton.TextTransparency = 1
+playButton.Active = true
+playButton.Modal = true
 playButton.Parent = playButtonFrame
 
 -- Add rounded corners to play button
@@ -279,7 +281,7 @@ local function fadeOutTexts(parent, duration)
 	end
 end
 
--- Realistic loading bar animation
+-- Realistic loading bar animation with true randomness
 local function animateLoadingBar()
 	-- Random loading time between min and max
 	local loadingTime = math.random(LOADING_TIME_MIN * 100, LOADING_TIME_MAX * 100) / 100
@@ -287,44 +289,71 @@ local function animateLoadingBar()
 	-- Get the max width for the loading bar
 	local maxWidth = loadingBarBg.AbsoluteSize.X
 
-	local startTime = tick()
 	local currentProgress = 0
+	local targetProgress = 0
 
-	-- Simulate realistic loading with multiple stages
-	local stages = {
-		{target = 0.15, speed = 0.8},   -- Quick start to 15%
-		{target = 0.35, speed = 0.5},   -- Slower to 35%
-		{target = 0.50, speed = 0.3},   -- Even slower to 50%
-		{target = 0.65, speed = 0.6},   -- Speed up a bit to 65%
-		{target = 0.75, speed = 0.25},  -- Slow down to 75%
-		{target = 0.90, speed = 0.4},   -- Medium speed to 90%
-		{target = 1.0, speed = 0.35}    -- Final push to 100%
-	}
+	-- Create random checkpoints throughout the loading process
+	local checkpoints = {}
 
-	for _, stage in ipairs(stages) do
-		while currentProgress < stage.target do
-			local elapsed = tick() - startTime
-			local targetProgress = math.min(elapsed / loadingTime, stage.target)
+	-- Always start at 0
+	table.insert(checkpoints, {percent = 0, time = 0})
 
-			-- Smooth interpolation with easing
-			currentProgress = currentProgress + (targetProgress - currentProgress) * stage.speed * 0.1
+	-- Generate 8-15 random checkpoints with varying speeds
+	local numCheckpoints = math.random(8, 15)
+	local timeAccumulator = 0
 
-			-- Update bar fill with smooth easing
-			local barWidth = math.floor(currentProgress * maxWidth)
+	for i = 1, numCheckpoints do
+		local percentJump = math.random(3, 15) -- Random jump between 3-15%
+		local newPercent = math.min(checkpoints[#checkpoints].percent + percentJump, 95)
+
+		-- Random time for this segment (creates variable speed)
+		local segmentTime = math.random(50, 200) / 100
+		timeAccumulator = timeAccumulator + segmentTime
+
+		table.insert(checkpoints, {percent = newPercent, time = timeAccumulator})
+	end
+
+	-- Always end at 100%
+	table.insert(checkpoints, {percent = 100, time = loadingTime})
+
+	-- Animate through all checkpoints
+	for i = 2, #checkpoints do
+		local startPercent = checkpoints[i-1].percent
+		local endPercent = checkpoints[i].percent
+		local startTime = checkpoints[i-1].time
+		local endTime = checkpoints[i].time
+		local duration = endTime - startTime
+
+		local segmentStart = tick()
+
+		while tick() - segmentStart < duration do
+			local elapsed = tick() - segmentStart
+			local progress = elapsed / duration
+
+			-- Use easing for smooth movement
+			local easedProgress = 1 - math.pow(1 - progress, 3) -- Cubic ease out
+
+			targetProgress = startPercent + (endPercent - startPercent) * easedProgress
+
+			-- Smooth interpolation to target
+			currentProgress = currentProgress + (targetProgress - currentProgress) * 0.3
+
+			-- Update bar
+			local barWidth = math.floor((currentProgress / 100) * maxWidth)
 			loadingBarFill.Size = UDim2.new(0, barWidth, 1, 0)
 
 			-- Update percentage text
-			local displayPercent = math.floor(currentProgress * 100)
+			local displayPercent = math.floor(currentProgress)
 			loadingPercent.Text = displayPercent .. "%"
 
-			-- Small delay for smooth animation
 			task.wait(0.03)
-
-			-- Break if we've exceeded total loading time
-			if elapsed >= loadingTime then
-				break
-			end
 		end
+
+		-- Snap to target for this checkpoint
+		currentProgress = endPercent
+		local barWidth = math.floor((currentProgress / 100) * maxWidth)
+		loadingBarFill.Size = UDim2.new(0, barWidth, 1, 0)
+		loadingPercent.Text = math.floor(currentProgress) .. "%"
 	end
 
 	-- Ensure we reach exactly 100%
@@ -417,23 +446,38 @@ playButton.MouseLeave:Connect(function()
 	createTween(playButton, {Size = UDim2.new(0, 250, 0, 80)}, 0.2):Play()
 end)
 
--- Play button click handler
-playButton.MouseButton1Click:Connect(function()
-	-- Disable button to prevent multiple clicks
+-- Variable to prevent multiple clicks
+local buttonClicked = false
+
+-- Function to handle button click
+local function onPlayButtonClick()
+	if buttonClicked then return end
+	buttonClicked = true
+
+	print("Play button clicked!") -- Debug message
+
+	-- Disable button interactions
 	playButton.Active = false
 
-	-- Use task.spawn to allow yielding in the callback
-	task.spawn(function()
-		-- Fade out everything
-		local finalFadeOut = createTween(mainFrame, {BackgroundTransparency = 1}, FADE_OUT_TIME)
-		fadeOutTexts(playButtonFrame, FADE_OUT_TIME)
+	-- Fade out play button
+	fadeOut(playButton, FADE_OUT_TIME, "BackgroundTransparency")
+	fadeOut(playButton, FADE_OUT_TIME, "TextTransparency")
+	fadeOut(buttonStroke, FADE_OUT_TIME, "Transparency")
 
-		finalFadeOut.Completed:Wait()
+	wait(FADE_OUT_TIME)
 
-		-- Destroy the GUI
-		introGui:Destroy()
-	end)
-end)
+	-- Fade out the black background
+	local finalFadeOut = createTween(mainFrame, {BackgroundTransparency = 1}, FADE_OUT_TIME)
+	finalFadeOut:Play()
+	finalFadeOut.Completed:Wait()
+
+	-- Destroy the GUI
+	introGui:Destroy()
+end
+
+-- Connect button events (use both for better compatibility)
+playButton.MouseButton1Click:Connect(onPlayButtonClick)
+playButton.Activated:Connect(onPlayButtonClick)
 
 -- Start the cinematic
 playCinematic()
