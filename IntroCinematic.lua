@@ -16,6 +16,8 @@ local STUDIO_DECAL_ID = "rbxassetid://0" -- Replace with your studio logo decal 
 local FADE_IN_TIME = 1.5
 local STUDIO_DISPLAY_TIME = 3
 local FADE_OUT_TIME = 1.5
+local LOADING_TIME_MIN = 10 -- Minimum loading time in seconds
+local LOADING_TIME_MAX = 20 -- Maximum loading time in seconds
 local DEVELOPERS = {
 	{name = "John Doe", role = "Lead Developer"},
 	{name = "Jane Smith", role = "Scripter"},
@@ -127,6 +129,67 @@ for i, dev in ipairs(DEVELOPERS) do
 	yOffset = yOffset + 80
 end
 
+-- Loading Bar Screen
+local loadingFrame = Instance.new("Frame")
+loadingFrame.Name = "LoadingFrame"
+loadingFrame.Size = UDim2.new(1, 0, 1, 0)
+loadingFrame.Position = UDim2.new(0, 0, 0, 0)
+loadingFrame.BackgroundTransparency = 1
+loadingFrame.Visible = false
+loadingFrame.Parent = mainFrame
+
+local loadingTitle = Instance.new("TextLabel")
+loadingTitle.Name = "LoadingTitle"
+loadingTitle.Size = UDim2.new(0.8, 0, 0, 50)
+loadingTitle.Position = UDim2.new(0.1, 0, 0.4, 0)
+loadingTitle.BackgroundTransparency = 1
+loadingTitle.Text = "LOADING..."
+loadingTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+loadingTitle.TextSize = 32
+loadingTitle.Font = Enum.Font.GothamBold
+loadingTitle.TextTransparency = 1
+loadingTitle.Parent = loadingFrame
+
+-- Loading bar background
+local loadingBarBg = Instance.new("Frame")
+loadingBarBg.Name = "LoadingBarBg"
+loadingBarBg.Size = UDim2.new(0.5, 0, 0, 8)
+loadingBarBg.Position = UDim2.new(0.25, 0, 0.5, 0)
+loadingBarBg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+loadingBarBg.BorderSizePixel = 0
+loadingBarBg.BackgroundTransparency = 1
+loadingBarBg.Parent = loadingFrame
+
+local loadingBarBgCorner = Instance.new("UICorner")
+loadingBarBgCorner.CornerRadius = UDim.new(0, 4)
+loadingBarBgCorner.Parent = loadingBarBg
+
+-- Loading bar fill
+local loadingBarFill = Instance.new("Frame")
+loadingBarFill.Name = "LoadingBarFill"
+loadingBarFill.Size = UDim2.new(0, 0, 1, 0)
+loadingBarFill.Position = UDim2.new(0, 0, 0, 0)
+loadingBarFill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+loadingBarFill.BorderSizePixel = 0
+loadingBarFill.Parent = loadingBarBg
+
+local loadingBarFillCorner = Instance.new("UICorner")
+loadingBarFillCorner.CornerRadius = UDim.new(0, 4)
+loadingBarFillCorner.Parent = loadingBarFill
+
+-- Loading percentage text
+local loadingPercent = Instance.new("TextLabel")
+loadingPercent.Name = "LoadingPercent"
+loadingPercent.Size = UDim2.new(0.8, 0, 0, 30)
+loadingPercent.Position = UDim2.new(0.1, 0, 0.53, 0)
+loadingPercent.BackgroundTransparency = 1
+loadingPercent.Text = "0%"
+loadingPercent.TextColor3 = Color3.fromRGB(200, 200, 200)
+loadingPercent.TextSize = 20
+loadingPercent.Font = Enum.Font.Gotham
+loadingPercent.TextTransparency = 1
+loadingPercent.Parent = loadingFrame
+
 -- Play Button Screen
 local playButtonFrame = Instance.new("Frame")
 playButtonFrame.Name = "PlayButtonFrame"
@@ -216,6 +279,60 @@ local function fadeOutTexts(parent, duration)
 	end
 end
 
+-- Realistic loading bar animation
+local function animateLoadingBar()
+	-- Random loading time between min and max
+	local loadingTime = math.random(LOADING_TIME_MIN * 100, LOADING_TIME_MAX * 100) / 100
+
+	-- Get the max width for the loading bar
+	local maxWidth = loadingBarBg.AbsoluteSize.X
+
+	local startTime = tick()
+	local currentProgress = 0
+
+	-- Simulate realistic loading with multiple stages
+	local stages = {
+		{target = 0.15, speed = 0.8},   -- Quick start to 15%
+		{target = 0.35, speed = 0.5},   -- Slower to 35%
+		{target = 0.50, speed = 0.3},   -- Even slower to 50%
+		{target = 0.65, speed = 0.6},   -- Speed up a bit to 65%
+		{target = 0.75, speed = 0.25},  -- Slow down to 75%
+		{target = 0.90, speed = 0.4},   -- Medium speed to 90%
+		{target = 1.0, speed = 0.35}    -- Final push to 100%
+	}
+
+	for _, stage in ipairs(stages) do
+		while currentProgress < stage.target do
+			local elapsed = tick() - startTime
+			local targetProgress = math.min(elapsed / loadingTime, stage.target)
+
+			-- Smooth interpolation with easing
+			currentProgress = currentProgress + (targetProgress - currentProgress) * stage.speed * 0.1
+
+			-- Update bar fill with smooth easing
+			local barWidth = math.floor(currentProgress * maxWidth)
+			loadingBarFill.Size = UDim2.new(0, barWidth, 1, 0)
+
+			-- Update percentage text
+			local displayPercent = math.floor(currentProgress * 100)
+			loadingPercent.Text = displayPercent .. "%"
+
+			-- Small delay for smooth animation
+			task.wait(0.03)
+
+			-- Break if we've exceeded total loading time
+			if elapsed >= loadingTime then
+				break
+			end
+		end
+	end
+
+	-- Ensure we reach exactly 100%
+	loadingBarFill.Size = UDim2.new(1, 0, 1, 0)
+	loadingPercent.Text = "100%"
+	wait(0.5) -- Hold at 100% briefly
+end
+
 -- Cinematic sequence
 local function playCinematic()
 	-- Phase 1: Studio Logo
@@ -258,7 +375,28 @@ local function playCinematic()
 
 	developersFrame.Visible = false
 
-	-- Phase 3: Play Button
+	-- Phase 3: Loading Bar
+	loadingFrame.Visible = true
+	wait(0.3)
+
+	-- Fade in loading screen elements
+	fadeIn(loadingTitle, FADE_IN_TIME, "TextTransparency")
+	fadeIn(loadingBarBg, FADE_IN_TIME, "BackgroundTransparency")
+	fadeIn(loadingPercent, FADE_IN_TIME, "TextTransparency")
+	wait(FADE_IN_TIME)
+
+	-- Animate the loading bar
+	animateLoadingBar()
+
+	-- Fade out loading screen
+	fadeOut(loadingTitle, FADE_OUT_TIME, "TextTransparency")
+	fadeOut(loadingBarBg, FADE_OUT_TIME, "BackgroundTransparency")
+	fadeOut(loadingPercent, FADE_OUT_TIME, "TextTransparency")
+	wait(FADE_OUT_TIME)
+
+	loadingFrame.Visible = false
+
+	-- Phase 4: Play Button
 	playButtonFrame.Visible = true
 	wait(0.3)
 
@@ -281,14 +419,20 @@ end)
 
 -- Play button click handler
 playButton.MouseButton1Click:Connect(function()
-	-- Fade out everything
-	local finalFadeOut = createTween(mainFrame, {BackgroundTransparency = 1}, FADE_OUT_TIME)
-	fadeOutTexts(playButtonFrame, FADE_OUT_TIME)
+	-- Disable button to prevent multiple clicks
+	playButton.Active = false
 
-	finalFadeOut.Completed:Wait()
+	-- Use task.spawn to allow yielding in the callback
+	task.spawn(function()
+		-- Fade out everything
+		local finalFadeOut = createTween(mainFrame, {BackgroundTransparency = 1}, FADE_OUT_TIME)
+		fadeOutTexts(playButtonFrame, FADE_OUT_TIME)
 
-	-- Destroy the GUI
-	introGui:Destroy()
+		finalFadeOut.Completed:Wait()
+
+		-- Destroy the GUI
+		introGui:Destroy()
+	end)
 end)
 
 -- Start the cinematic
